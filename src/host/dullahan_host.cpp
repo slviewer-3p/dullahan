@@ -44,6 +44,8 @@ int main(int argc, char* argv[])
 #include <thread>
 #include <tlhelp32.h>
 #include <atomic>
+#include <mmdeviceapi.h>
+#include <audiopolicy.h>
 /*
   Nasty hack to stop flash from displaying a popup with "NO SANDBOX"
   Flashplayer will try to spawn a cmd.exe and echo this message into it, we
@@ -155,15 +157,44 @@ void getSHMVolumePtr( uint32_t aParent)
 
 void adjustVolume(unsigned long aVolume)
 {
-	float fVolume = 100.f;
-	fVolume /= aVolume;
-	DWORD channelVolume = (DWORD)(fVolume * 65535.0f);
-	channelVolume &= 0xFFFF;
-	DWORD hw_volume = channelVolume << 16 | channelVolume;
-	::waveOutSetVolume(NULL, hw_volume);
+	float fVolume = aVolume;
+	fVolume /= 100.f;
+
+
+    IMMDeviceEnumerator *pDevEnumerator = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, __uuidof(IMMDeviceEnumerator), (LPVOID *)&pDevEnumerator);
+
+    if (FAILED(hr))
+        return;
+
+    IMMDevice *pDevice = nullptr;
+
+    hr = pDevEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
+    pDevEnumerator->Release();
+
+    if (FAILED(hr))
+        return;
+
+    IAudioSessionManager *pManager = nullptr;
+    hr = pDevice->Activate(__uuidof(IAudioSessionManager), CLSCTX_INPROC_SERVER, NULL, (void**)&pManager);
+    pDevice->Release();
+
+    if (FAILED(hr))
+        return;
+
+    ISimpleAudioVolume *pVolume;
+    hr = pManager->GetSimpleAudioVolume(nullptr, FALSE, &pVolume);
+    pManager->Release();
+
+    if (FAILED(hr))
+        return;
+
+    pVolume->SetMasterVolume(fVolume, nullptr);
+
+    pVolume->Release();
+
 }
 
-#pragma comment(lib,"winmm.lib")
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                      LPSTR lpCmdLine, int nCmdShow)
 {
@@ -201,7 +232,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	   {
 		   std::thread([ParentProcess]()
 		   {
-			   unsigned long oldVolume = 100;
+               CoInitialize(nullptr);
+               unsigned long oldVolume = 100;
 			   while (!g_Exit)
 			   {
 				   std::this_thread::sleep_for(std::chrono::milliseconds(125));
