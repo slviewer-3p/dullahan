@@ -145,7 +145,7 @@ public:
 
     bool useWavAudio() override
     {
-        return true;
+        return false;
     }
    
     void addCommandLines(CefRefPtr<CefCommandLine> command_line)  override
