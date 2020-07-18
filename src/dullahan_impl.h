@@ -43,14 +43,33 @@ class dullahan_render_handler;
 class dullahan_context_handler;
 class dullahan_callback_manager;
 
+class dullahan_platform_impl
+{
+public:
+    virtual  ~dullahan_platform_impl() = default;
+
+    virtual void init() = 0;
+    virtual void initWidevine(std::string) = 0;
+    virtual bool useAudioOOP() = 0;
+    virtual bool useWavAudio() = 0;
+    virtual void setVolume(float aVolume) = 0;
+    virtual void addCommandLines(CefRefPtr<CefCommandLine> command_line) = 0;
+};
+
+class dullahan_platform_impl_default : public dullahan_platform_impl
+{
+    void init() override {}
+    void initWidevine(std::string) override {}
+    bool useAudioOOP() override { return false; }
+    bool useWavAudio() override { return true; }
+    void setVolume(float aVolume) override {}
+    void addCommandLines(CefRefPtr<CefCommandLine> command_line)  override {}
+};
+
 class dullahan_impl :
     public CefApp,
     public CefPdfPrintCallback
 {
-	void platormInitWidevine(std::string cachePath);
-	void platformAddCommandLines( CefRefPtr<CefCommandLine> command_line);
-	void platformSetVolume(float);
-	void platformInit();
 	public:
         dullahan_impl();
         ~dullahan_impl();
@@ -100,7 +119,8 @@ class dullahan_impl :
         void setPageZoom(const double zoom_val);
         void setVolume(float aVolume)
         {
-            platformSetVolume(aVolume);
+            if (mPlatformImpl)
+                mPlatformImpl->setVolume(aVolume);
         }
 
         bool editCanCopy();
@@ -173,6 +193,8 @@ class dullahan_impl :
         double mRequestedPageZoom;
         const int mViewDepth = 4;
         std::vector<std::string> mCustomSchemes;
+
+        std::unique_ptr<dullahan_platform_impl> mPlatformImpl;
 
         IMPLEMENT_REFCOUNTING(dullahan_impl);
 };

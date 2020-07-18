@@ -1,63 +1,74 @@
 
-volatile unsigned long *shmVolume;
 
-void dullahan_impl::platformInit()
+class dullahan_platform_windows : public dullahan_platform_impl
 {
-	uint32_t parent = ::GetCurrentProcessId();
-	std::stringstream strm;
-
-	strm << R"(Local\dullahan_volume.)" << parent;
-
-	HANDLE hFile = CreateFileMappingA(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0,	64, strm.str().c_str() );
-
-	uint8_t *pBuff = nullptr;
-	if ( hFile )
-		pBuff = (uint8_t*)MapViewOfFile(hFile, FILE_MAP_ALL_ACCESS, 0, 0, 64);
-
-	if (pBuff == NULL && hFile)
-	{
-		CloseHandle(hFile);
-	}
-
-	if (pBuff)
-	{
-		uintptr_t pAligned = reinterpret_cast<uintptr_t>(pBuff);
-		pAligned += 0xF;
-		pAligned &= ~0xF;
-		shmVolume = (volatile unsigned long*)pAligned;
-		::InterlockedExchange(shmVolume, 100L);
-	}
-}
-
-void dullahan_impl::platformSetVolume(float aVolume)
-{
-	unsigned long volume = 100.f* aVolume;
-	if (volume < 0)
-		volume = 0;
-	else if (volume > 100)
-		volume = 100;
-	if ( shmVolume)
-		::InterlockedExchange(shmVolume, volume);
-}
-
-void dullahan_impl::platormInitWidevine(std::string cachePath)
-{
-}
-
-void dullahan_impl::platformAddCommandLines(CefRefPtr<CefCommandLine> command_line)
-{
-    if (mForceWaveAudio == true)
+    volatile unsigned long *mSHMVolume;
+    HANDLE mFile;
+    uint8_t *mMappedFile;
+public:
+    dullahan_platform_windows()
     {
-        // Grouping these together since they're interconnected.
-        // The pair, force use of WAV based audio and the second stops
-        // CEF using out of process audio which breaks ::waveOutSetVolume()
-        // that ise used to control the volume of media in a web page
-        command_line->AppendSwitch("force-wave-audio");
-
-        // <ND> This breaks twitch and friends. Allow to not add this via env override (for debugging)
-        char const *pEnv{ getenv("nd_AudioServiceOutOfProcess") };
-        bool bDisableAudioServiceOutOfProcess{ true };
-        if (pEnv && pEnv[0] == '1')
-            bDisableAudioServiceOutOfProcess = false;
+        mSHMVolume = nullptr;
+        mFile = nullptr;
+        mMappedFile = nullptr;
     }
-}
+
+    ~dullahan_platform_windows()
+    {
+        if (mMappedFile)
+            ::UnmapViewOfFile(mMappedFile);
+        if (mFile)
+            ::CloseHandle(mFile);
+    }
+
+    void init() override
+    {
+        std::stringstream strm;
+
+        strm << R"(Local\dullahan_volume.)" << ::GetCurrentProcessId();
+
+        mFile = CreateFileMappingA(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, 64, strm.str().c_str());
+
+        if (mFile)
+            mMappedFile = (uint8_t*)MapViewOfFile(mFile, FILE_MAP_ALL_ACCESS, 0, 0, 64);
+
+        if (mMappedFile)
+        {
+            uintptr_t pAligned = reinterpret_cast<uintptr_t>(mMappedFile);
+            pAligned += 0xF;
+            pAligned &= ~0xF;
+            mSHMVolume = (volatile unsigned long*)pAligned;
+            ::InterlockedExchange(mSHMVolume, 100L);
+        }
+    }
+
+    void setVolume(float aVolume) override
+    {
+        unsigned long volume = static_cast< unsigned long>(100.f * aVolume);
+        if (volume < 0)
+            volume = 0;
+        else if (volume > 100)
+            volume = 100;
+        if (mSHMVolume)
+            ::InterlockedExchange(mSHMVolume, volume);
+    }
+
+    void initWidevine(std::string) override
+    {
+    }
+
+    bool useAudioOOP() override
+    {
+        return true;
+    }
+
+    bool useWavAudio() override
+    {
+        return true;
+    }
+   
+    void addCommandLines(CefRefPtr<CefCommandLine> command_line)  override
+    {
+    }
+
+};

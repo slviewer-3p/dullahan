@@ -71,6 +71,14 @@ dullahan_impl::dullahan_impl() :
     mFlipMouseY(false),
     mRequestedPageZoom(1.0)
 {
+#ifdef WIN32
+    mPlatformImpl = std::make_unique< dullahan_platform_windows >();
+#elif __linunx__
+    mPlatformImpl = std::make_unique< dullahan_platform_linux >();
+#else
+    mPlatformImpl = std::make_unique< dullahan_platform_impl_default >();
+#endif
+
     DLNOUT("dullahan_impl::dullahan_impl()");
 }
 
@@ -133,15 +141,42 @@ void dullahan_impl::OnBeforeCommandLineProcessing(const CefString& process_type,
             command_line->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
         }
 
-		platformAddCommandLines( command_line );		
+        if (mForceWaveAudio == true)
+        {
+            // Grouping these together since they're interconnected.
+            // The pair, force use of WAV based audio and the second stops
+            // CEF using out of process audio which breaks ::waveOutSetVolume()
+            // that ise used to control the volume of media in a web page
+  
+            if ( mPlatformImpl->useWavAudio())
+                command_line->AppendSwitch("force-wave-audio");
+
+            // <ND> This breaks twitch and friends. Allow to not add this via env override (for debugging)
+            char const *pEnv{ getenv("nd_AudioServiceOutOfProcess") };
+            bool bDisableAudioServiceOutOfProcess{ true };
+
+            if ( mPlatformImpl->useAudioOOP())
+                bDisableAudioServiceOutOfProcess = false;
+
+            if (pEnv && pEnv[0] == '1')
+                bDisableAudioServiceOutOfProcess = false;
+
+            if (bDisableAudioServiceOutOfProcess)
+                command_line->AppendSwitchWithValue("disable-features", "AudioServiceOutOfProcess");
+        }
+        mPlatformImpl->addCommandLines(command_line);
     }
 }
 
 bool dullahan_impl::initCEF(dullahan::dullahan_settings& user_settings)
 {
-	platformInit();
+    mPlatformImpl->init();
+
+    CefSettings settings;
+
 #ifdef WIN32
     CefMainArgs args(GetModuleHandle(nullptr));
+    CefString(&settings.browser_subprocess_path) = "dullahan_host.exe";
 #elif __APPLE__
     CefScopedLibraryLoader library_loader;
     if (!library_loader.LoadInMain())
@@ -150,42 +185,20 @@ bool dullahan_impl::initCEF(dullahan::dullahan_settings& user_settings)
     }
 
     CefMainArgs args(0, nullptr);
-#endif
-#ifdef __linux__
-    CefMainArgs args(0, nullptr);
-#endif
-
-    CefSettings settings;
-
-    // point to host application
-#ifdef WIN32
-    CefString(&settings.browser_subprocess_path) = "dullahan_host.exe";
-#elif __APPLE__
     NSString* appBundlePath = [[NSBundle mainBundle] bundlePath];
     CefString(&settings.browser_subprocess_path) =
         [[NSString stringWithFormat:
-          @"%@/Contents/Frameworks/DullahanHelper.app/Contents/MacOS/DullahanHelper", appBundlePath] UTF8String];
+    @"%@/Contents/Frameworks/DullahanHelper.app/Contents/MacOS/DullahanHelper", appBundlePath] UTF8String];
 #endif
 #ifdef __linux__
+    CefMainArgs args(0, nullptr);
     CefString(&settings.browser_subprocess_path) = getExeCwd() + "/dullahan_host";
-    bool useSandbox = false;
-    std::string sandboxName = getExeCwd() + "/chrome-sandbox";
-    struct stat st;
+#endif
 
-    if (!stat(sandboxName.c_str(), &st))
-    {
-        // Sandbox must be owned by root:root and has the suid bit set, otherwise cef won't use it.
-        if (st.st_uid == 0 && st.st_gid == 0 && (st.st_mode & S_ISUID) == S_ISUID)
-        {
-            useSandbox = true;
-        }
-    }
 
-    settings.no_sandbox = !useSandbox;
-#else
     // explicitly disable sandbox
     settings.no_sandbox = true;
-#endif
+
     // required for CEF 72+ to indicate headless
     settings.windowless_rendering_enabled = true;
 
@@ -245,10 +258,8 @@ bool dullahan_impl::initCEF(dullahan::dullahan_settings& user_settings)
     // this flag needed for some video cards to force onPaints to work - off by default
     mBeginFrameScheduling = user_settings.begin_frame_scheduling;
 
-#ifdef WIN32
     // this flag forces Windows WaveOut/In audio API even if Core Audio is supported
     mForceWaveAudio = user_settings.force_wave_audio;
-#endif
 
     // this flag if set, adds command line options to disable the GPU and GPU compositing.
     // Appears to be needed to make sites like Google Maps work now. The GPU compositing
@@ -303,7 +314,7 @@ bool dullahan_impl::init(dullahan::dullahan_settings& user_settings)
 {
     DLNOUT("dullahan_impl::init()");
 
-	platormInitWidevine(user_settings.cache_path);
+    mPlatformImpl->initWidevine(user_settings.cache_path);
 
     if (!initCEF(user_settings))
     {
