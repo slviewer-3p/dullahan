@@ -43,9 +43,6 @@ int main(int argc, char* argv[])
 #pragma warning( disable : 4702)
 #include <thread>
 #include <tlhelp32.h>
-#include <atomic>
-#include <mmdeviceapi.h>
-#include <audiopolicy.h>
 /*
   Nasty hack to stop flash from displaying a popup with "NO SANDBOX"
   Flashplayer will try to spawn a cmd.exe and echo this message into it, we
@@ -128,10 +125,7 @@ std::pair<HANDLE, uint32_t> GetParentProcess()
 }
 #endif
 
-volatile unsigned long *shmVolume;
-std::atomic<bool> g_Exit;
-
-void getSHMVolumePtr( uint32_t aParent)
+void registerPID( uint32_t aParent)
 {
 	std::stringstream strm;
 
@@ -140,58 +134,23 @@ void getSHMVolumePtr( uint32_t aParent)
 	HANDLE hFile = OpenFileMappingA( FILE_MAP_ALL_ACCESS, FALSE, strm.str().c_str());
 
 	uint8_t *pBuff = nullptr;
-	if (hFile)
-		pBuff = (uint8_t*)MapViewOfFile(hFile, FILE_MAP_ALL_ACCESS, 0, 0, 64);
+    if (hFile)
+    {
+        pBuff = (uint8_t*)MapViewOfFile(hFile, FILE_MAP_ALL_ACCESS, 0, 0, 64);
 
-	if (pBuff == NULL && hFile)
-		CloseHandle(hFile);
+        if (pBuff)
+        {
+            uintptr_t pAligned = reinterpret_cast<uintptr_t>(pBuff);
+            pAligned += 0xF;
+            pAligned &= ~0xF;
+            unsigned long curPID = ::GetCurrentProcessId();
+            volatile unsigned long *pPID = (volatile unsigned long*)pAligned;
+            ::InterlockedExchange(pPID, curPID);
+            ::UnmapViewOfFile(pBuff);
+        }
 
-	if (pBuff)
-	{
-		uintptr_t pAligned = reinterpret_cast<uintptr_t>(pBuff);
-		pAligned += 0xF;
-		pAligned &= ~0xF;
-		shmVolume = (volatile unsigned long*)pAligned;
-	}
-}
-
-void adjustVolume(unsigned long aVolume)
-{
-	float fVolume = aVolume;
-	fVolume /= 100.f;
-
-
-    IMMDeviceEnumerator *pDevEnumerator = nullptr;
-    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, __uuidof(IMMDeviceEnumerator), (LPVOID *)&pDevEnumerator);
-
-    if (FAILED(hr))
-        return;
-
-    IMMDevice *pDevice = nullptr;
-
-    hr = pDevEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
-    pDevEnumerator->Release();
-
-    if (FAILED(hr))
-        return;
-
-    IAudioSessionManager *pManager = nullptr;
-    hr = pDevice->Activate(__uuidof(IAudioSessionManager), CLSCTX_INPROC_SERVER, NULL, (void**)&pManager);
-    pDevice->Release();
-
-    if (FAILED(hr))
-        return;
-
-    ISimpleAudioVolume *pVolume;
-    hr = pManager->GetSimpleAudioVolume(nullptr, FALSE, &pVolume);
-    pManager->Release();
-
-    if (FAILED(hr))
-        return;
-
-    pVolume->SetMasterVolume(fVolume, nullptr);
-
-    pVolume->Release();
+        ::CloseHandle(hFile);
+    }
 
 }
 
@@ -208,10 +167,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         ExitProcess(0);
     }).detach();
 #endif
-
-	
-	CefMainArgs args(GetModuleHandle(nullptr));
-
+    CefMainArgs args(GetModuleHandle(nullptr));
 
    std::string strArgs{ lpCmdLine };
    size_t nI = strArgs.find("--type=");
@@ -225,28 +181,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
    }
 
    if (strType == "utility")
-   {
-	   getSHMVolumePtr(pParent.second);
-	   g_Exit = false;
-	   if (shmVolume)
-	   {
-		   std::thread([ParentProcess]()
-		   {
-               CoInitialize(nullptr);
-               unsigned long oldVolume = 100;
-			   while (!g_Exit)
-			   {
-				   std::this_thread::sleep_for(std::chrono::milliseconds(125));
-				   unsigned long newVolume = ::InterlockedExchangeSubtract(shmVolume, 0);
-				   if ( newVolume != oldVolume )
-				   {
-					   oldVolume = newVolume;
-					   adjustVolume(newVolume);
-				   }
-			   }
-		   }).detach();
-	   }
-   }
+	   registerPID(pParent.second);
 
     return CefExecuteProcess(args, nullptr, nullptr);
 }
