@@ -210,6 +210,11 @@ void dullahan::setPageZoom(const double zoom_val)
     mImpl->setPageZoom(zoom_val);
 }
 
+void dullahan::setVolume(float aVolume)
+{
+	mImpl->setVolume(aVolume);
+}
+
 bool dullahan::editCanCopy()
 {
     return mImpl->editCanCopy();

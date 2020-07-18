@@ -139,6 +139,7 @@ void dullahan_impl::OnBeforeCommandLineProcessing(const CefString& process_type,
 
 bool dullahan_impl::initCEF(dullahan::dullahan_settings& user_settings)
 {
+	platformInit();
 #ifdef WIN32
     CefMainArgs args(GetModuleHandle(nullptr));
 #elif __APPLE__

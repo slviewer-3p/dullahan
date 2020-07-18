@@ -49,7 +49,9 @@ class dullahan_impl :
 {
 	void platormInitWidevine(std::string cachePath);
 	void platformAddCommandLines( CefRefPtr<CefCommandLine> command_line);
-    public:
+	void platformSetVolume(float);
+	void platformInit();
+	public:
         dullahan_impl();
         ~dullahan_impl();
 
@@ -96,6 +98,10 @@ class dullahan_impl :
         void setFocus();
 
         void setPageZoom(const double zoom_val);
+        void setVolume(float aVolume)
+        {
+            platformSetVolume(aVolume);
+        }
 
         bool editCanCopy();
         bool editCanCut();

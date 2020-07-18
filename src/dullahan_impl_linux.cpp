@@ -23,6 +23,14 @@ namespace
     }
 }
 
+void dullahan_impl::platformInit()
+{
+}
+
+void dullahan_impl::platformSetVolume(float aVolume)
+{
+}
+
 void dullahan_impl::platormInitWidevine(std::string cachePath)
 {
 }

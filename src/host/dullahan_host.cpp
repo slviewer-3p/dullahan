@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
 #pragma warning( disable : 4702)
 #include <thread>
 #include <tlhelp32.h>
-
+#include <atomic>
 /*
   Nasty hack to stop flash from displaying a popup with "NO SANDBOX"
   Flashplayer will try to spawn a cmd.exe and echo this message into it, we
@@ -99,7 +99,7 @@ void enablePPAPIFlashHack(LPSTR lpCmdLine)
 // works around a CEF issue (yet to be filed) where the host process is not destroyed
 // after CEF exits in some case on Windows 7
 // Making it switchable for now while I investigate it a bit
-HANDLE GetParentProcess()
+std::pair<HANDLE, uint32_t> GetParentProcess()
 {
     HANDLE Snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
@@ -122,15 +122,54 @@ HANDLE GetParentProcess()
 
     CloseHandle(Snapshot);
 
-    return OpenProcess(SYNCHRONIZE, FALSE, ProcessEntry.th32ParentProcessID);
+	return{ OpenProcess(SYNCHRONIZE, FALSE, ProcessEntry.th32ParentProcessID), ProcessEntry.th32ParentProcessID };
 }
 #endif
 
+volatile unsigned long *shmVolume;
+std::atomic<bool> g_Exit;
+
+void getSHMVolumePtr( uint32_t aParent)
+{
+	std::stringstream strm;
+
+	strm << R"(Local\dullahan_volume.)" << aParent;
+
+	HANDLE hFile = OpenFileMappingA( FILE_MAP_ALL_ACCESS, FALSE, strm.str().c_str());
+
+	uint8_t *pBuff = nullptr;
+	if (hFile)
+		pBuff = (uint8_t*)MapViewOfFile(hFile, FILE_MAP_ALL_ACCESS, 0, 0, 64);
+
+	if (pBuff == NULL && hFile)
+		CloseHandle(hFile);
+
+	if (pBuff)
+	{
+		uintptr_t pAligned = reinterpret_cast<uintptr_t>(pBuff);
+		pAligned += 0xF;
+		pAligned &= ~0xF;
+		shmVolume = (volatile unsigned long*)pAligned;
+	}
+}
+
+void adjustVolume(unsigned long aVolume)
+{
+	float fVolume = 100.f;
+	fVolume /= aVolume;
+	DWORD channelVolume = (DWORD)(fVolume * 65535.0f);
+	channelVolume &= 0xFFFF;
+	DWORD hw_volume = channelVolume << 16 | channelVolume;
+	::waveOutSetVolume(NULL, hw_volume);
+}
+
+#pragma comment(lib,"winmm.lib")
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                      LPSTR lpCmdLine, int nCmdShow)
 {
+	auto pParent = GetParentProcess();
 #ifdef HOST_PROCESS_REAPER
-    HANDLE ParentProcess = GetParentProcess();
+	HANDLE ParentProcess = pParent.first;
 
     std::thread([ParentProcess]()
     {
@@ -139,9 +178,43 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     }).detach();
 #endif
 
-    CefMainArgs args(GetModuleHandle(nullptr));
+	
+	CefMainArgs args(GetModuleHandle(nullptr));
 
-    enablePPAPIFlashHack(lpCmdLine);
+
+   std::string strArgs{ lpCmdLine };
+   size_t nI = strArgs.find("--type=");
+   std::string strType;
+   if (nI != std::string::npos)
+   {
+		nI += strlen("--type=");
+		size_t nE = strArgs.find(" ", nI);
+		if (nE != std::string::npos)
+			strType = strArgs.substr(nI, nE - nI);
+   }
+
+   if (strType == "utility")
+   {
+	   getSHMVolumePtr(pParent.second);
+	   g_Exit = false;
+	   if (shmVolume)
+	   {
+		   std::thread([ParentProcess]()
+		   {
+			   unsigned long oldVolume = 100;
+			   while (!g_Exit)
+			   {
+				   std::this_thread::sleep_for(std::chrono::milliseconds(125));
+				   unsigned long newVolume = ::InterlockedExchangeSubtract(shmVolume, 0);
+				   if ( newVolume != oldVolume )
+				   {
+					   oldVolume = newVolume;
+					   adjustVolume(newVolume);
+				   }
+			   }
+		   }).detach();
+	   }
+   }
 
     return CefExecuteProcess(args, nullptr, nullptr);
 }
