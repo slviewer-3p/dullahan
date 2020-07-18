@@ -98,7 +98,7 @@ void enablePPAPIFlashHack(LPSTR lpCmdLine)
 // works around a CEF issue (yet to be filed) where the host process is not destroyed
 // after CEF exits in some case on Windows 7
 // Making it switchable for now while I investigate it a bit
-std::pair<HANDLE, uint32_t> GetParentProcess()
+HANDLE GetParentProcess()
 {
     HANDLE Snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
@@ -121,45 +121,15 @@ std::pair<HANDLE, uint32_t> GetParentProcess()
 
     CloseHandle(Snapshot);
 
-	return{ OpenProcess(SYNCHRONIZE, FALSE, ProcessEntry.th32ParentProcessID), ProcessEntry.th32ParentProcessID };
+	return OpenProcess(SYNCHRONIZE, FALSE, ProcessEntry.th32ParentProcessID);
 }
 #endif
-
-void registerPID( uint32_t aParent)
-{
-	std::stringstream strm;
-
-	strm << R"(Local\dullahan_volume.)" << aParent;
-
-	HANDLE hFile = OpenFileMappingA( FILE_MAP_ALL_ACCESS, FALSE, strm.str().c_str());
-
-	uint8_t *pBuff = nullptr;
-    if (hFile)
-    {
-        pBuff = (uint8_t*)MapViewOfFile(hFile, FILE_MAP_ALL_ACCESS, 0, 0, 64);
-
-        if (pBuff)
-        {
-            uintptr_t pAligned = reinterpret_cast<uintptr_t>(pBuff);
-            pAligned += 0xF;
-            pAligned &= ~0xF;
-            unsigned long curPID = ::GetCurrentProcessId();
-            volatile unsigned long *pPID = (volatile unsigned long*)pAligned;
-            ::InterlockedExchange(pPID, curPID);
-            ::UnmapViewOfFile(pBuff);
-        }
-
-        ::CloseHandle(hFile);
-    }
-
-}
 
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                      LPSTR lpCmdLine, int nCmdShow)
 {
-	auto pParent = GetParentProcess();
 #ifdef HOST_PROCESS_REAPER
-	HANDLE ParentProcess = pParent.first;
+    HANDLE ParentProcess = GetParentProcess();
 
     std::thread([ParentProcess]()
     {
@@ -168,20 +138,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     }).detach();
 #endif
     CefMainArgs args(GetModuleHandle(nullptr));
-
-   std::string strArgs{ lpCmdLine };
-   size_t nI = strArgs.find("--type=");
-   std::string strType;
-   if (nI != std::string::npos)
-   {
-		nI += strlen("--type=");
-		size_t nE = strArgs.find(" ", nI);
-		if (nE != std::string::npos)
-			strType = strArgs.substr(nI, nE - nI);
-   }
-
-   if (strType == "utility")
-	   registerPID(pParent.second);
 
     return CefExecuteProcess(args, nullptr, nullptr);
 }

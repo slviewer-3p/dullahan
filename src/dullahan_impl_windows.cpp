@@ -1,12 +1,35 @@
 #include <mmdeviceapi.h>
 #include <audiopolicy.h>
+#include <tlhelp32.h>
+
+std::vector<uint32_t> GetProcessesInGroup()
+{
+    HANDLE Snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+    PROCESSENTRY32 ProcessEntry = {};
+    std::vector< uint32_t > vChildren{};
+    ProcessEntry.dwSize = sizeof(PROCESSENTRY32);
+
+    DWORD CurrentProcessId = GetCurrentProcessId();
+    vChildren.push_back(CurrentProcessId);
+
+    if (Process32First(Snapshot, &ProcessEntry))
+    {
+        do
+        {
+            if (ProcessEntry.th32ParentProcessID == CurrentProcessId)
+                vChildren.push_back(ProcessEntry.th32ProcessID);
+        } while (Process32Next(Snapshot, &ProcessEntry));
+    }
+
+    CloseHandle(Snapshot);
+
+    return vChildren;
+}
 
 
 class dullahan_platform_windows : public dullahan_platform_impl
 {
-    volatile unsigned long *mPID{ nullptr };
-    HANDLE mFile{ nullptr };
-    uint8_t *mMappedFile{ nullptr };
     ISimpleAudioVolume *mVolumeControl{ nullptr };
 public:
     dullahan_platform_windows()
@@ -15,35 +38,12 @@ public:
 
     ~dullahan_platform_windows()
     {
-        if (mMappedFile)
-            ::UnmapViewOfFile(mMappedFile);
-        if (mFile)
-            ::CloseHandle(mFile);
-
         if (mVolumeControl)
             mVolumeControl->Release();
     }
 
     void init() override
     {
-        std::stringstream strm;
-
-        strm << R"(Local\dullahan_volume.)" << ::GetCurrentProcessId();
-
-        mFile = CreateFileMappingA(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, 64, strm.str().c_str());
-
-        if (mFile)
-            mMappedFile = (uint8_t*)MapViewOfFile(mFile, FILE_MAP_ALL_ACCESS, 0, 0, 64);
-
-        if (mMappedFile)
-        {
-            uintptr_t pAligned = reinterpret_cast<uintptr_t>(mMappedFile);
-            pAligned += 0xF;
-            pAligned &= ~0xF;
-            mPID = (volatile unsigned long*)pAligned;
-            ::InterlockedExchange(mPID, 0L);
-        }
-
         ::CoInitialize(nullptr);
     }
 
@@ -52,13 +52,7 @@ public:
         if (mVolumeControl)
             return mVolumeControl;
 
-        if (!mPID)
-            return nullptr;
-
-        unsigned long nPID = ::InterlockedExchangeSubtract(mPID, 0);
-        if (nPID == 0)
-            return nullptr;
-
+        std::vector< uint32_t > vPIDs{ GetProcessesInGroup() };
 
         IMMDeviceEnumerator *pDevEnumerator = nullptr;
         HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, __uuidof(IMMDeviceEnumerator), (LPVOID *)&pDevEnumerator);
@@ -82,7 +76,7 @@ public:
             return nullptr;
 
         IAudioSessionEnumerator *pEnum{ nullptr };
-        pManager->GetSessionEnumerator(&pEnum);
+        hr = pManager->GetSessionEnumerator(&pEnum);
         pManager->Release();
 
         if (FAILED(hr))
@@ -97,7 +91,10 @@ public:
         for (int nSession = 0; pVolControl == nullptr && nSession < nSessionCount; ++nSession)
         {
             IAudioSessionControl *pSession{ nullptr };
-            if (FAILED(pEnum->GetSession(nSession, &pSession)))
+ 
+            hr = pEnum->GetSession(nSession, &pSession);
+
+            if (FAILED(hr))
                 continue;
 
             IAudioSessionControl2 *pSession2;
@@ -108,7 +105,8 @@ public:
                 continue;
 
             DWORD dwPID{ 0 };
-            if (SUCCEEDED(pSession2->GetProcessId(&dwPID)) && dwPID == nPID )
+            hr = pSession2->GetProcessId(&dwPID);
+            if (SUCCEEDED(hr) && std::find(vPIDs.begin(), vPIDs.end(), dwPID) != vPIDs.end())
             {
                 hr = pSession2->QueryInterface( __uuidof( ISimpleAudioVolume ), (void**)&pVolControl);
                 if (FAILED(hr))
@@ -120,19 +118,20 @@ public:
 
         pEnum->Release();
         mVolumeControl = pVolControl;
-        return mVolumeControl;    }
+        return mVolumeControl;
+    }
 
-    void setVolume(float aVolume) override
+    bool setVolume(float aVolume) override
     {
         ISimpleAudioVolume *pVol{ getAudioSession() };
         if (!pVol)
-            return;
+            return false;
         if (aVolume < 0)
             aVolume = 0.f;
         else if (aVolume > 1.f)
             aVolume = 1.f;
 
-        pVol->SetMasterVolume(aVolume, nullptr);
+        return SUCCEEDED( pVol->SetMasterVolume(aVolume, nullptr) );
     }
 
     void initWidevine(std::string) override

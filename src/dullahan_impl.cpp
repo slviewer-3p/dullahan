@@ -439,6 +439,13 @@ void dullahan_impl::update()
         return;
     }
 
+    if (mPlatformImpl && std::abs(mDesiredVolume - mCurVolume) > 0.01f)
+    {
+        if (mPlatformImpl->setVolume(mDesiredVolume))
+            mCurVolume = mDesiredVolume;
+    }
+
+
     CefDoMessageLoopWork();
 
     // CEF/Chromium resets page zoom in between pages

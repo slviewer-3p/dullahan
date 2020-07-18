@@ -29,7 +29,7 @@ class dullahan_platform_impl_linux : public dullahan_platform_impl
     void initWidevine(std::string) override {}
     bool useAudioOOP() override { return false; }
     bool useWavAudio() override { return true; }
-    void setVolume(float aVolume) override {};
+    void setVolume(float aVolume) override { return true; }
     void addCommandLines(CefRefPtr<CefCommandLine> command_line) override
     {
         // <ND> For Linux autodetection does not work, we need to pass ppapi-flash-path/version.

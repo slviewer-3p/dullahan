@@ -52,7 +52,7 @@ public:
     virtual void initWidevine(std::string) = 0;
     virtual bool useAudioOOP() = 0;
     virtual bool useWavAudio() = 0;
-    virtual void setVolume(float aVolume) = 0;
+    virtual bool setVolume(float aVolume) = 0;
     virtual void addCommandLines(CefRefPtr<CefCommandLine> command_line) = 0;
 };
 
@@ -62,7 +62,7 @@ class dullahan_platform_impl_default : public dullahan_platform_impl
     void initWidevine(std::string) override {}
     bool useAudioOOP() override { return false; }
     bool useWavAudio() override { return true; }
-    void setVolume(float aVolume) override {}
+    bool setVolume(float aVolume) override { return true; }
     void addCommandLines(CefRefPtr<CefCommandLine> command_line)  override {}
 };
 
@@ -119,8 +119,7 @@ class dullahan_impl :
         void setPageZoom(const double zoom_val);
         void setVolume(float aVolume)
         {
-            if (mPlatformImpl)
-                mPlatformImpl->setVolume(aVolume);
+            mDesiredVolume = aVolume;
         }
 
         bool editCanCopy();
@@ -195,6 +194,8 @@ class dullahan_impl :
         std::vector<std::string> mCustomSchemes;
 
         std::unique_ptr<dullahan_platform_impl> mPlatformImpl;
+        float mCurVolume{ -1.f };
+        float mDesiredVolume{ 1.f };
 
         IMPLEMENT_REFCOUNTING(dullahan_impl);
 };
