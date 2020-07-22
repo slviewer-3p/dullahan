@@ -29,6 +29,7 @@
 
 #include <functional>
 #include <sstream>
+#include <chrono>
 
 #include "cef_app.h"
 #ifndef CEF_INCLUDE_CEF_VERSION_H_
@@ -117,10 +118,8 @@ class dullahan_impl :
         void setFocus();
 
         void setPageZoom(const double zoom_val);
-        void setVolume(float aVolume)
-        {
-            mDesiredVolume = aVolume;
-        }
+		void setVolume(float aVolume);
+		bool tryUpdateVolume() const;
 
         bool editCanCopy();
         bool editCanCut();
@@ -193,9 +192,15 @@ class dullahan_impl :
         const int mViewDepth = 4;
         std::vector<std::string> mCustomSchemes;
 
+		struct VolumeInfo
+		{
+			float mCurVolume{ 1.f };
+			float mDesiredVolume{ 1.f };
+			std::chrono::system_clock::time_point mLastVolumeUpdate;
+			uint32_t mVolumeUpdateFails{ 0 };
+		} mVolumeData;
+
         std::unique_ptr<dullahan_platform_impl> mPlatformImpl;
-        float mCurVolume{ -1.f };
-        float mDesiredVolume{ 1.f };
 
         IMPLEMENT_REFCOUNTING(dullahan_impl);
 };

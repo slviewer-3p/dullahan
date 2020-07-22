@@ -126,10 +126,6 @@ public:
         ISimpleAudioVolume *pVol{ getAudioSession() };
         if (!pVol)
             return false;
-        if (aVolume < 0)
-            aVolume = 0.f;
-        else if (aVolume > 1.f)
-            aVolume = 1.f;
 
         return SUCCEEDED( pVol->SetMasterVolume(aVolume, nullptr) );
     }

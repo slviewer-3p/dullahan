@@ -432,19 +432,63 @@ void dullahan_impl::run()
     CefRunMessageLoop();
 }
 
+void dullahan_impl::setVolume(float aVolume)
+{
+	if (aVolume < 0.0)
+		aVolume = 0.0f;
+	else if (aVolume > 1.f)
+		aVolume = 1.f;
+	mVolumeData.mDesiredVolume = aVolume;
+}
+bool dullahan_impl::tryUpdateVolume() const
+{
+	// First try ever? Go ahead
+	if (mVolumeData.mLastVolumeUpdate.time_since_epoch() == std::chrono::system_clock::time_point::duration::zero())
+		return true;
+
+	// <ND> Step 1: Only try to update every second
+	auto diffTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - mVolumeData.mLastVolumeUpdate);
+	std::chrono::milliseconds waitTime(500);
+
+	if (diffTime < waitTime)
+		return false;
+
+	// <ND> Step 2: If dullahan keeps failing to update the volume, slowly increase wait time.
+
+	if (mVolumeData.mVolumeUpdateFails > 0)
+	{
+		waitTime = std::chrono::milliseconds( 1000 + 500 * mVolumeData.mVolumeUpdateFails );
+
+		if (diffTime < waitTime)
+			return false;
+	}
+	
+	return true;
+}
+
 void dullahan_impl::update()
 {
     if (! mInitialized)
-    {
         return;
-    }
 
-    if (mPlatformImpl && std::abs(mDesiredVolume - mCurVolume) > 0.01f)
-    {
-        if (mPlatformImpl->setVolume(mDesiredVolume))
-            mCurVolume = mDesiredVolume;
-    }
-
+	if (mPlatformImpl && std::abs(mVolumeData.mDesiredVolume - mVolumeData.mCurVolume) > 0.01f)
+	{
+		if (tryUpdateVolume())
+		{
+			mVolumeData.mLastVolumeUpdate = std::chrono::system_clock::now();
+			if (mPlatformImpl->setVolume(mVolumeData.mDesiredVolume))
+			{
+				mVolumeData.mCurVolume = mVolumeData.mDesiredVolume;
+				mVolumeData.mVolumeUpdateFails = 0;
+			}
+			else
+			{
+				// mVolumeUpdateFails will be in "(steps of 500ms) + 1s' to wait in case we keep failing.
+				if (mVolumeData.mVolumeUpdateFails < 4 * 2)
+					++mVolumeData.mVolumeUpdateFails;
+			}
+		}
+	}
 
     CefDoMessageLoopWork();
 
