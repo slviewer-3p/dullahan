@@ -43,7 +43,6 @@
 #include "include/wrapper/cef_library_loader.h"
 #endif
 
-
 #ifdef __linux__
 #include "dullahan_impl_linux.cpp"
 #elif WIN32
