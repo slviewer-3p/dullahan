@@ -72,10 +72,10 @@ dullahan_impl::dullahan_impl() :
 {
 #ifdef WIN32
     mPlatformImpl = std::make_unique< dullahan_platform_windows >();
-#elif __linunx__
-    mPlatformImpl = std::make_unique< dullahan_platform_linux >();
+#elif __linux__
+    mPlatformImpl.reset( new dullahan_platform_impl_linux() );
 #else
-    mPlatformImpl = std::make_unique< dullahan_platform_impl_default >();
+    mPlatformImpl.reset( new dullahan_platform_impl_default() );
 #endif
 
     DLNOUT("dullahan_impl::dullahan_impl()");
