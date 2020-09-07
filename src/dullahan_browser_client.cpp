@@ -33,6 +33,10 @@
 
 #include "dullahan_impl.h"
 
+#ifndef WIN32
+#include <unistd.h>
+#endif
+
 dullahan_browser_client::dullahan_browser_client(dullahan_impl* parent,
         dullahan_render_handler* render_handler) :
     mParent(parent),
@@ -125,10 +129,8 @@ void dullahan_browser_client::OnBeforeClose(CefRefPtr<CefBrowser> browser)
             CefDoMessageLoopWork();
 #ifdef WIN32
             Sleep(sleep_time_between_calls);
-#elif __APPLE__
-            sleep(sleep_time_between_calls);
-#elif __linux__
-            sleep(sleep_time_between_calls);
+#else
+            usleep(sleep_time_between_calls*1000);
 #endif
         }
 
