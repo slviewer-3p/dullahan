@@ -150,15 +150,13 @@ void dullahan_impl::OnBeforeCommandLineProcessing(const CefString& process_type,
             command_line->AppendSwitch("use-fake-ui-for-media-stream");
         }
 
-        platformAddCommandLines(command_line);
+       mPlatformImpl->addCommandLines(command_line);
     }
 }
 
 bool dullahan_impl::initCEF(dullahan::dullahan_settings& user_settings)
 {
     mPlatformImpl->init();
-
-    CefSettings settings;
 
 #ifdef WIN32
     CefMainArgs args(GetModuleHandle(nullptr));
@@ -170,9 +168,6 @@ bool dullahan_impl::initCEF(dullahan::dullahan_settings& user_settings)
         return false;
     }
 
-    CefMainArgs args(0, nullptr);
-#endif
-#ifdef __linux__
     CefMainArgs args(0, nullptr);
 #endif
 
