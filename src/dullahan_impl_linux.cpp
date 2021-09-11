@@ -10,17 +10,17 @@
 
 namespace
 {
-    std::string getExeCwd()
+std::string getExeCwd()
+{
+    char path[ 4096 ];
+    int len = readlink("/proc/self/exe", path, sizeof(path));
+    if (len != -1)
     {
-        char path[ 4096 ];
-        int len = readlink("/proc/self/exe", path, sizeof(path));
-        if (len != -1)
-        {
-            path[len] = 0;
-            return dirname(path) ;
-        }
-        return "";
+        path[len] = 0;
+        return dirname(path) ;
     }
+    return "";
+}
 }
 
 class dullahan_platform_impl_linux : public dullahan_platform_impl
@@ -30,9 +30,6 @@ class dullahan_platform_impl_linux : public dullahan_platform_impl
     bool useAudioOOP() override { return false; }
     bool useWavAudio() override { return true; }
     bool setVolume(float aVolume) override { return true; }
-    void addCommandLines(CefRefPtr<CefCommandLine> command_line) override
-    {
-    }
+    void addCommandLines(CefRefPtr<CefCommandLine> command_line) override;
 };
-
 

@@ -41,8 +41,8 @@
 
 class dullahan_browser_client;
 class dullahan_render_handler;
-class dullahan_context_handler;
 class dullahan_callback_manager;
+class CefRequestContext;
 
 class dullahan_platform_impl
 {
@@ -171,6 +171,7 @@ class dullahan_impl :
 
         CefRefPtr<dullahan_browser_client> mBrowserClient;
         CefRefPtr<dullahan_render_handler> mRenderHandler;
+        CefRefPtr<CefRequestContext> mRequestContext;
         CefRefPtr<CefBrowser> mBrowser;
         dullahan_callback_manager* mCallbackManager;
 
@@ -186,6 +187,7 @@ class dullahan_impl :
         bool mDisableNetworkService;
         bool mUseMockKeyChain;
         bool mAutoPlayWithoutGesture;
+        bool mFakeUIForMediaStream;
         bool mFlipPixelsY;
         bool mFlipMouseY;
         double mRequestedPageZoom;
