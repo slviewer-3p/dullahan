@@ -30,6 +30,6 @@ class dullahan_platform_impl_linux : public dullahan_platform_impl
     bool useAudioOOP() override { return false; }
     bool useWavAudio() override { return true; }
     bool setVolume(float aVolume) override { return true; }
-    void addCommandLines(CefRefPtr<CefCommandLine> command_line) override;
+    void addCommandLines(CefRefPtr<CefCommandLine> command_line) override{}
 };
 
