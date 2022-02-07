@@ -113,57 +113,6 @@ enum SDL_Keymod
     KMOD_RESERVED = 0x8000
 };
 
-std::map< uint32_t, uint32_t > mSDL2_to_Win
-{
-    { 0x0, 0x0 }
-    , { 0x8, 0x8 }
-    , { 0x9, 0x9 }
-    , { 0xd, 0xd }
-    , { 0x1b, 0x1b }
-    , { 0x7f, 0x2e }
-    , { 0x40000039, 0x14 }
-    , { 0x4000003a, 0x70 }
-    , { 0x4000003b, 0x71 }
-    , { 0x4000003c, 0x72 }
-    , { 0x4000003d, 0x73 }
-    , { 0x4000003e, 0x74 }
-    , { 0x4000003f, 0x75 }
-    , { 0x40000040, 0x76 }
-    , { 0x40000041, 0x77 }
-    , { 0x40000042, 0x78 }
-    , { 0x40000043, 0x79 }
-    , { 0x40000044, 0x7a }
-    , { 0x40000045, 0x7b }
-    , { 0x40000048, 0x13 }
-    , { 0x40000049, 0x2d }
-    , { 0x4000004a, 0x24 }
-    , { 0x4000004b, 0x21 }
-    , { 0x4000004d, 0x23 }
-    , { 0x4000004e, 0x22 }
-    , { 0x4000004f, 0x27 }
-    , { 0x40000050, 0x25 }
-    , { 0x40000051, 0x28 }
-    , { 0x40000052, 0x26 }
-    , { 0x40000054, 0x6f }
-    , { 0x40000055, 0x6a }
-    , { 0x40000056, 0xbd }
-    , { 0x40000057, 0xbb }
-    , { 0x40000058, 0xd }
-    , { 0x40000063, 0xbe }
-    , { 0x40000068, 0x7c }
-    , { 0x40000069, 0x7d }
-    , { 0x4000006a, 0x7e }
-    , { 0x40000075, 0x2f }
-    , { 0x40000076, 0x12 }
-    , { 0x4000009c, 0xc }
-    , { 0x400000e0, 0x11 }
-    , { 0x400000e1, 0x10 }
-    , { 0x400000e2, 0x12 }
-    , { 0x400000e4, 0x11 }
-    , { 0x400000e5, 0x10 }
-    , { 0x400000e6, 0x12 }
-};
-
 bool isAltPressed(uint32_t mod)
 {
     return 0 != (mod & (KMOD_LALT | KMOD_RALT));
@@ -179,64 +128,46 @@ bool isControlPressed(uint32_t mod)
     return 0 != (mod & (KMOD_LCTRL | KMOD_RCTRL));
 }
 
-void dullahan_impl::nativeKeyboardEventSDL2(dullahan::EKeyEvent key_event, uint32_t key_data, uint32_t key_modifiers, bool keypad_input)
+void dullahan_impl::nativeKeyboardEventSDL2(dullahan::EKeyEvent key_event, uint32_t native_key, uint32_t windows_key, uint32_t key_modifiers, bool keypad_input)
 {
     if (!mBrowser || !mBrowser->GetHost())
-    {
         return;
-    }
+
+	if( native_key == 0 )
+		return;
 
     CefKeyEvent event = {};
     event.is_system_key = false;
+    event.native_key_code = native_key;
+    event.character = native_key;
+    event.unmodified_character = native_key;
     event.modifiers = key_modifiers;
 
-    if (keypad_input)
-    {
-        event.modifiers |= EVENTFLAG_IS_KEY_PAD;
-    }
-
-    if (isAltPressed(key_modifiers))
+    if (key_modifiers & EVENTFLAG_ALT_DOWN)
     {
         event.modifiers &= ~EVENTFLAG_ALT_DOWN;
         event.is_system_key = true;
     }
 
-    if (isShiftPressed(key_modifiers))
-    {
-        event.modifiers &= ~EVENTFLAG_SHIFT_DOWN;
-    }
+    if (keypad_input)
+        event.modifiers |= EVENTFLAG_IS_KEY_PAD;
 
-    if (isControlPressed(key_modifiers))
-    {
-        event.modifiers &= ~EVENTFLAG_CONTROL_DOWN;
-    }
+    event.windows_key_code = windows_key;
 
-    auto itr = mSDL2_to_Win.find(key_data);
-    if (itr != mSDL2_to_Win.end())
+    if (key_event == dullahan::KE_KEY_DOWN)
     {
-        key_data = itr->second;
-    }
-
-    if (key_event == dullahan::KE_KEY_CHAR)
-    {
-        event.character = key_data;
-        event.type = KEYEVENT_CHAR;
+        event.type = KEYEVENT_RAWKEYDOWN;
         mBrowser->GetHost()->SendKeyEvent(event);
-    }
-    else
-    {
-        event.windows_key_code = key_data;
-
-        if (key_event == dullahan::KE_KEY_DOWN)
+        if (event.character)
         {
-            event.type = KEYEVENT_RAWKEYDOWN;
-            mBrowser->GetHost()->SendKeyEvent(event);
-        }
-        else if (key_event == dullahan::KE_KEY_UP)
-        {
-            event.native_key_code |= 0xC0000000;
-            event.type = KEYEVENT_KEYUP;
+            event.type = KEYEVENT_CHAR;
             mBrowser->GetHost()->SendKeyEvent(event);
         }
     }
+    else if (key_event == dullahan::KE_KEY_UP)
+	{
+		event.native_key_code |= 0xC0000000;
+		event.type = KEYEVENT_KEYUP;
+		mBrowser->GetHost()->SendKeyEvent(event);
+	}
 }
