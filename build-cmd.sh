@@ -250,6 +250,7 @@ print(':'.join(OrderedDict((dir.rstrip('/'), 1) for dir in sys.argv[1].split(':'
 		cp ${cef_no_wrapper_build_dir}/libcef_dll_wrapper/libcef_dll_wrapper.a $stage/lib/release
 
 		cp -a ${cef_no_wrapper_dir}/Release/*.so ${stage}/lib/release/
+		strip ${stage}/lib/release/*.so
 		cp -a ${cef_no_wrapper_dir}/Release/swiftshader/* ${stage}/lib/release/swiftshader/
 
 		cp dullahan_host ${stage}/bin/release/
