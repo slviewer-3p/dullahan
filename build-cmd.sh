@@ -224,7 +224,7 @@ print(':'.join(OrderedDict((dir.rstrip('/'), 1) for dir in sys.argv[1].split(':'
 		cmake --install stage/build
 
 		strip stage/lib/release/libcef.so
-		strip stage/bin/release/libcef.so
+		rm stage/bin/release/*.so
 		
 		g++ -std=c++11 	-I "${cef_no_wrapper_dir}/include" 	-I "${dullahan_source_dir}" -o "$stage/version"  "$top/tools/autobuild_version.cpp"
 
