@@ -21,13 +21,20 @@ function(check_exists variable)
 endfunction()
 
 set(CEF_PREBUILD_LINUX https://cef-builds.spotifycdn.com/cef_binary_91.1.23%2Bg04c8d56%2Bchromium-91.0.4472.164_linux64_minimal.tar.bz2 )
+set(CEF_PREBUILD_LINUX_ARM https://cef-builds.spotifycdn.com/cef_binary_91.1.23%2Bg04c8d56%2Bchromium-91.0.4472.164_linuxarm64_minimal.tar.bz2 )
 set(USE_SPOTIFY_CEF Off )
 
 if( CMAKE_SYSTEM_NAME STREQUAL "Linux" )
   include(FetchContent)
   set(USE_SPOTIFY_CEF On )
-  
-  FetchContent_Declare( cef_prebuild URL  ${CEF_PREBUILD_LINUX} )
+
+  if( CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64" )
+	FetchContent_Declare( cef_prebuild URL  ${CEF_PREBUILD_LINUX_ARM} )
+	set(PROJECT_ARCH "aarch64")
+  else()
+	FetchContent_Declare( cef_prebuild URL  ${CEF_PREBUILD_LINUX} )
+  endif()
+
   FetchContent_MakeAvailable(cef_prebuild)
 
   set(CEF_ROOT "${cef_prebuild_SOURCE_DIR}")
@@ -136,7 +143,12 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     check_exists(OPENGL_FRAMEWORK)
     check_exists(COCOA_FRAMEWORK)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(CMAKE_CXX_LINK_FLAGS "-Wl,--no-keep-memory -Wl,--build-id -Wl,-rpath,'$ORIGIN:$ORIGIN/../lib' -Wl,--exclude-libs,ALL")
+  set( CMAKE_BUILD_WITH_INSTALL_RPATH TRUE )
+  set( CMAKE_INSTALL_RPATH $ORIGIN $ORIGIN/../lib )
+  add_link_options(
+	-Wl,--no-keep-memory
+	-Wl,--build-id
+	-Wl,--exclude-libs,ALL)
 endif()
 
 ###############################################################################

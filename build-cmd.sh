@@ -218,7 +218,7 @@ print(':'.join(OrderedDict((dir.rstrip('/'), 1) for dir in sys.argv[1].split(':'
 		#Force version regeneration.
 		rm -f src/dullahan_version.h
 
-		cmake -S . -B stage/build  -DCMAKE_BUILD_TYPE=Release -G Ninja -DCMAKE_INSTALL_PREFIX=stage
+		cmake -S . -B stage/build  -DCMAKE_BUILD_TYPE=Release  -DCMAKE_INSTALL_PREFIX=stage
 		
 		cmake --build stage/build
 		cmake --install stage/build
