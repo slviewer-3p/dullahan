@@ -35,6 +35,7 @@ if( CMAKE_SYSTEM_NAME STREQUAL "Linux" )
 	FetchContent_Declare( cef_prebuild URL  ${CEF_PREBUILD_LINUX} )
   endif()
 
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wno-array-bounds")
   FetchContent_MakeAvailable(cef_prebuild)
 
   set(CEF_ROOT "${cef_prebuild_SOURCE_DIR}")
@@ -184,7 +185,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++11 -xobjective-c++")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++11 -xobjective-c++")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wno-array-bounds")
 endif()
 
 ###############################################################################
